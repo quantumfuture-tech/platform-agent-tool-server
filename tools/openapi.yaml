@@ -1,0 +1,399 @@
+openapi: 3.0.3
+info:
+  title: Platform Agent Tool Server
+  version: 0.1.0
+  description: |
+    平台智能体 + 自建插件服务器的最小工具协议。
+
+    五个工具都走 POST + JSON。服务端返回结论与一段可直接转述的 text；
+    模型只负责把 text 说给人听，不参与任何计算。数据全部是合成的。
+servers:
+  - url: http://localhost:8788
+    description: 本地演示服务（先跑 node server/index.js）
+
+paths:
+  /api/tools/plan:
+    post:
+      operationId: plan
+      summary: 返回培养方案结构
+      description: 返回课程、课程组与毕业学分要求，不涉及任何学生记录。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProgramInput"
+      responses:
+        "200":
+          description: 培养方案
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/tools/progress:
+    post:
+      operationId: progress
+      summary: 算学分进度与分组缺口
+      description: |
+        用一份成绩记录计算已获学分、缺口、完成率与各课程组缺口。
+        不传 transcript 时使用仓库内置的合成记录；传了就只算传进来的这份。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TranscriptInput"
+      responses:
+        "200":
+          description: 学分进度
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgressResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/tools/risk:
+    post:
+      operationId: risk
+      summary: 给出风险档位
+      description: |
+        把学分缺口比例与未通过课程数分别映射成档位，取较高者作为最终档位。
+        档位阈值写在规则文件里，不写在提示词里。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TranscriptInput"
+      responses:
+        "200":
+          description: 风险档位
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/tools/report:
+    post:
+      operationId: report
+      summary: 生成文字报告
+      description: |
+        把进度与风险拼成一份可以整段粘贴的报告。报告编号由培养方案与记录决定，
+        同一输入必得同一编号与同一段文字。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TranscriptInput"
+      responses:
+        "200":
+          description: 文字报告
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/tools/explain:
+    post:
+      operationId: explain
+      summary: 解释一条结论
+      description: |
+        返回一条结论的值、所用规则与输入。conclusion 取值可通过调用一次
+        progress 或 risk 后从 facts 推导；当前支持 earnedCredits、gapCredits、
+        gapRatio、failedCourses、riskByGap、riskByFailed、riskLevel、
+        graduationReady，以及 groupGap:<课程组 id>。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExplainInput"
+      responses:
+        "200":
+          description: 结论、规则与输入
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExplainResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+components:
+  responses:
+    BadRequest:
+      description: 入参不合法（字段、取值或 JSON 结构不对）
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ToolError"
+
+  schemas:
+    ProgramInput:
+      type: object
+      description: plan 的入参
+      properties:
+        programId:
+          type: string
+          description: 培养方案 id；省略则使用当前唯一一份合成方案
+      additionalProperties: true
+
+    TranscriptInput:
+      type: object
+      description: progress、risk、report 的入参
+      properties:
+        programId:
+          type: string
+          description: 培养方案 id；省略则使用默认方案
+        transcript:
+          type: array
+          description: 成绩记录；省略则使用内置的 8 门课合成记录
+          items:
+            $ref: "#/components/schemas/CourseRecord"
+      additionalProperties: true
+
+    ExplainInput:
+      type: object
+      required:
+        - conclusion
+      properties:
+        conclusion:
+          type: string
+          description: 要解释的结论 id，例如 riskLevel 或 groupGap:major
+        programId:
+          type: string
+        transcript:
+          type: array
+          items:
+            $ref: "#/components/schemas/CourseRecord"
+      additionalProperties: true
+
+    CourseRecord:
+      type: object
+      required:
+        - courseId
+        - status
+      properties:
+        courseId:
+          type: string
+          description: 课程代码，必须在培养方案里存在
+        status:
+          type: string
+          enum:
+            - passed
+            - failed
+            - in_progress
+            - not_started
+        grade:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: 可选成绩，仅作记录，不参与任何计算
+      additionalProperties: true
+
+    Course:
+      type: object
+      properties:
+        code:
+          type: string
+        title:
+          type: string
+        credits:
+          type: number
+        group:
+          type: string
+        term:
+          type: string
+
+    Group:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        requiredCredits:
+          type: number
+        earnedCredits:
+          type: number
+        gapCredits:
+          type: number
+        complete:
+          type: boolean
+        courseCount:
+          type: integer
+
+    ToolError:
+      type: object
+      required:
+        - ok
+        - code
+        - error
+      properties:
+        ok:
+          type: boolean
+          enum:
+            - false
+        code:
+          type: string
+          description: 机器可读的错误码，例如 invalid_argument、unknown_tool
+        error:
+          type: string
+          description: 可直接说给人听的错误说明
+        field:
+          type: string
+          description: 出错的具体字段，可选
+
+    PlanResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        tool:
+          type: string
+          enum:
+            - plan
+        programId:
+          type: string
+        label:
+          type: string
+        graduationCredits:
+          type: number
+        courses:
+          type: array
+          items:
+            $ref: "#/components/schemas/Course"
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/Group"
+        text:
+          type: string
+          description: 可直接转述给人的文字
+
+    ProgressResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        tool:
+          type: string
+          enum:
+            - progress
+        programId:
+          type: string
+        earnedCredits:
+          type: number
+        requiredCredits:
+          type: number
+        gapCredits:
+          type: number
+        completionRatio:
+          type: number
+        counts:
+          type: object
+          properties:
+            passed:
+              type: integer
+            failed:
+              type: integer
+            in_progress:
+              type: integer
+            not_started:
+              type: integer
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/Group"
+        text:
+          type: string
+
+    RiskResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        tool:
+          type: string
+          enum:
+            - risk
+        level:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+        label:
+          type: string
+        gapCredits:
+          type: number
+        gapRatio:
+          type: number
+        failedCourses:
+          type: integer
+        creditGapLevel:
+          type: string
+        failedCoursesLevel:
+          type: string
+        ruleText:
+          type: string
+        text:
+          type: string
+
+    ReportResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        tool:
+          type: string
+          enum:
+            - report
+        reportId:
+          type: string
+        title:
+          type: string
+        earnedCredits:
+          type: number
+        requiredCredits:
+          type: number
+        gapCredits:
+          type: number
+        riskLevel:
+          type: string
+        graduationReady:
+          type: boolean
+        text:
+          type: string
+
+    ExplainResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        tool:
+          type: string
+          enum:
+            - explain
+        conclusion:
+          type: string
+        label:
+          type: string
+        value: {}
+        unit:
+          type: string
+        rule:
+          type: string
+        inputs:
+          type: object
+          additionalProperties: true
+        text:
+          type: string
