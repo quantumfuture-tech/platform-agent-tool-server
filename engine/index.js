@@ -59,151 +59,28 @@ function validateProgram(program, source) {
 }
 
 // --- 规则加载开始 ---
-// 第一版把规则内联在代码里，随后外置为 engine/rules/*.json。
-const INLINE_PROGRAM = {
-  "programId": "demo-se-2024",
-  "label": "示例大学 · 软件工程 · 2024 培养方案（合成数据）",
-  "school": "示例大学",
-  "major": "软件工程",
-  "year": 2024,
-  "dataNote": "本文件全部内容为合成示例，不对应任何真实学校、专业或学生。",
-  "graduationCredits": 160,
-  "groups": [
-    {
-      "id": "general",
-      "label": "通识必修",
-      "requiredCredits": 48
-    },
-    {
-      "id": "foundation",
-      "label": "学科基础",
-      "requiredCredits": 52
-    },
-    {
-      "id": "major",
-      "label": "专业核心",
-      "requiredCredits": 44
-    },
-    {
-      "id": "practice",
-      "label": "实践环节",
-      "requiredCredits": 16
+function loadPrograms(dir) {
+  const target = dir || RULES_DIR;
+  const files = fs.readdirSync(target).filter(function (name) { return name.endsWith(".json"); }).sort();
+  const programs = new Map();
+  for (const file of files) {
+    const full = path.join(target, file);
+    let parsed = null;
+    try {
+      parsed = JSON.parse(fs.readFileSync(full, "utf8"));
+    } catch (error) {
+      throw new Error(file + ": JSON 解析失败：" + error.message);
     }
-  ],
-  "statuses": {
-    "passed": "已通过",
-    "failed": "未通过",
-    "in_progress": "进行中",
-    "not_started": "未开始"
-  },
-  "courses": [
-    {
-      "code": "GEN101",
-      "title": "大学写作与表达",
-      "credits": 24,
-      "group": "general",
-      "term": "第 1 学期"
-    },
-    {
-      "code": "GEN102",
-      "title": "数学与逻辑基础",
-      "credits": 24,
-      "group": "general",
-      "term": "第 1 学期"
-    },
-    {
-      "code": "FND201",
-      "title": "程序设计基础",
-      "credits": 26,
-      "group": "foundation",
-      "term": "第 2 学期"
-    },
-    {
-      "code": "FND202",
-      "title": "数据结构与算法",
-      "credits": 26,
-      "group": "foundation",
-      "term": "第 3 学期"
-    },
-    {
-      "code": "MAJ301",
-      "title": "软件工程方法",
-      "credits": 22,
-      "group": "major",
-      "term": "第 4 学期"
-    },
-    {
-      "code": "MAJ302",
-      "title": "数据库系统",
-      "credits": 22,
-      "group": "major",
-      "term": "第 5 学期"
-    },
-    {
-      "code": "PRA401",
-      "title": "工程实践项目",
-      "credits": 8,
-      "group": "practice",
-      "term": "第 6 学期"
-    },
-    {
-      "code": "PRA402",
-      "title": "毕业设计",
-      "credits": 8,
-      "group": "practice",
-      "term": "第 8 学期"
-    }
-  ],
-  "risk": {
-    "levels": {
-      "low": "低",
-      "medium": "中",
-      "high": "高"
-    },
-    "order": [
-      "low",
-      "medium",
-      "high"
-    ],
-    "creditGap": [
-      {
-        "level": "low",
-        "maxGapRatio": 0.15,
-        "note": "缺口不超过毕业学分的 15%"
-      },
-      {
-        "level": "medium",
-        "maxGapRatio": 0.35,
-        "note": "缺口不超过毕业学分的 35%"
-      },
-      {
-        "level": "high",
-        "maxGapRatio": 1,
-        "note": "缺口超过毕业学分的 35%"
-      }
-    ],
-    "failedCourses": [
-      {
-        "level": "low",
-        "maxFailed": 0,
-        "note": "没有未通过课程"
-      },
-      {
-        "level": "medium",
-        "maxFailed": 2,
-        "note": "未通过课程 1 到 2 门"
-      },
-      {
-        "level": "high",
-        "maxFailed": 999,
-        "note": "未通过课程 3 门及以上"
-      }
-    ]
+    validateProgram(parsed, file);
+    assertRule(!programs.has(parsed.programId), file + ": programId 重复：" + parsed.programId);
+    programs.set(parsed.programId, parsed);
   }
-};
-validateProgram(INLINE_PROGRAM, "inline");
-const PROGRAMS = new Map([[INLINE_PROGRAM.programId, INLINE_PROGRAM]]);
-const DEFAULT_PROGRAM_ID = INLINE_PROGRAM.programId;
+  assertRule(programs.size > 0, target + " 下没有任何规则文件");
+  return programs;
+}
+
+const PROGRAMS = loadPrograms();
+const DEFAULT_PROGRAM_ID = Array.from(PROGRAMS.keys())[0];
 // --- 规则加载结束 ---
 
 function listPrograms() {

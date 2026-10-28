@@ -9,50 +9,7 @@
 
 const engine = require("../engine");
 const render = require("../engine/render");
-const SAMPLE = {
-  "recordId": "sample-record-001",
-  "programId": "demo-se-2024",
-  "dataNote": "合成记录，不对应任何真实学生。",
-  "transcript": [
-    {
-      "courseId": "GEN101",
-      "status": "passed",
-      "grade": 88
-    },
-    {
-      "courseId": "GEN102",
-      "status": "passed",
-      "grade": 76
-    },
-    {
-      "courseId": "FND201",
-      "status": "passed",
-      "grade": 92
-    },
-    {
-      "courseId": "FND202",
-      "status": "passed",
-      "grade": 64
-    },
-    {
-      "courseId": "MAJ301",
-      "status": "passed",
-      "grade": 81
-    },
-    {
-      "courseId": "MAJ302",
-      "status": "in_progress"
-    },
-    {
-      "courseId": "PRA401",
-      "status": "not_started"
-    },
-    {
-      "courseId": "PRA402",
-      "status": "not_started"
-    }
-  ]
-};
+const SAMPLE = require("./sample/transcript.json");
 
 const STATUS_SET = new Set(engine.STATUSES);
 const MAX_BODY_ITEMS = 100;
