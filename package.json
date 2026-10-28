@@ -1,0 +1,14 @@
+{
+  "name": "platform-agent-tool-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "平台智能体 + 自建插件服务器的最小骨架：模型只负责对话，结论由服务器算。",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test tests/"
+  }
+}
